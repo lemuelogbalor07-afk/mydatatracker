@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <link rel="apple-touch-icon" href="icon.png">
+    <link rel="manifest" href="manifest.json">
+    
+    <title id="pageTitle">My Data App</title>
+    
+    <style>
+        :root { 
+            --primary: #2563eb; --bg: #f8fafc; --card: #ffffff; 
+            --text: #1e293b; --border: #cbd5e1; 
+        }
+        
+        body.dark-mode { 
+            --bg: #0f172a; --card: #1e293b; --text: #f1f5f9; --border: #334155; 
+        }
+        
+        body { 
+            font-family: -apple-system, system-ui, sans-serif; 
+            background: var(--bg); color: var(--text); margin: 0; padding: 20px;
+            transition: background 0.3s, color 0.3s;
+        }
+
+        .container { width: 100%; max-width: 600px; margin: auto; }
+        
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+        .editable-title { font-size: 1.5rem; font-weight: 800; border: none; background: transparent; color: var(--text); outline: none; }
+
+        .card { background: var(--card); padding: 1.2rem; border-radius: 15px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); margin-bottom: 20px; }
+        input { 
+            width: 100%; padding: 12px; margin-bottom: 10px; border: 1px solid var(--border); 
+            border-radius: 8px; background: var(--card); color: var(--text); box-sizing: border-box; 
+        }
+        
+        .btn-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; }
+        button { padding: 12px; border: none; border-radius: 8px; font-weight: 700; cursor: pointer; color: white; }
+        .btn-save { background: var(--primary); width: 100%; margin-bottom: 10px; }
+        .btn-csv { background: #16a34a; }
+        .btn-del { background: #ef4444; padding: 6px 12px; font-size: 0.8rem; border-radius: 6px; }
+        .btn-mode { background: #64748b; font-size: 0.8rem; }
+
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; background: var(--card); border-radius: 10px; overflow: hidden; }
+        th { background: #f1f5f9; padding: 12px 8px; text-align: left; font-size: 0.8rem; color: #64748b; border-bottom: 2px solid var(--border); }
+        td { padding: 12px 8px; border-bottom: 1px solid var(--border); font-size: 0.9rem; }
+        .hidden { display: none; }
+        
+        body.dark-mode th { background: #1e293b; color: #94a3b8; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div class="header">
+        <input type="text" id="siteName" class="editable-title" value="My Data App" oninput="saveTitle()">
+        <button class="btn-mode" onclick="toggleDarkMode()">🌙/☀️</button>
+    </div>
+
+    <div class="card">
+        <input type="text" id="itemName" placeholder="Date (e.g. 20 monday)">
+        <input type="text" id="itemNote" placeholder="Hours (e.g. 12)">
+        <input type="text" id="itemBs" placeholder="B/s (e.g. 12)">
+        
+        <button class="btn-save" onclick="addData()">Save Entry</button>
+        <div class="btn-row">
+            <button class="btn-csv" onclick="downloadCSV()">Export CSV</button>
+            <button style="background:#64748b" onclick="clearData()">Clear All</button>
+        </div>
+    </div>
+
+    <input type="text" id="search" placeholder="Search table..." onkeyup="filterTable()">
+
+    <table>
+        <thead>
+            <tr>
+                <th>Date</th>
+                <th>Hrs</th>
+                <th>B/s</th>
+                <th>Logged</th>
+                <th>Action</th>
+            </tr>
+        </thead>
+        <tbody id="tableBody"></tbody>
+    </table>
+</div>
+
+<script>
+    // 1. Storage Keys
+    const DATA_KEY = 'myAppData';
+
+    function toggleDarkMode() {
+        document.body.classList.toggle('dark-mode');
+        localStorage.setItem('darkMode', document.body.classList.contains('dark-mode'));
+    }
+
+    function saveTitle() {
+        localStorage.setItem('appTitle', document.getElementById('siteName').value);
+    }
+
+    function addData() {
+        const dateInput = document.getElementById('itemName');
+        const hourInput = document.getElementById('itemNote');
+        const bsInput = document.getElementById('itemBs');
+
+        if (!dateInput.value) return alert("Please enter a date");
+
+        const timeStamp = new Date().toLocaleDateString([], {month:'short', day:'numeric'});
+        
+        renderRow(dateInput.value, hourInput.value, bsInput.value, timeStamp);
+        saveTableToLocal();
+
+        // Clear Inputs
+        dateInput.value = '';
+        hourInput.value = '';
+        bsInput.value = '';
+        dateInput.focus();
+    }
+
+    function renderRow(date, hours, bs, time) {
+        const tableBody = document.getElementById('tableBody');
+        const row = tableBody.insertRow(0);
+        
+        row.innerHTML = `
+            <td><b>${date}</b></td>
+            <td>${hours}</td>
+            <td>${bs}</td>
+            <td><small>${time}</small></td>
+            <td><button class="btn-del" onclick="deleteRow(this)">X</button></td>
+        `;
+    }
+
+    function deleteRow(btn) {
+        if(confirm('Delete this entry?')) {
+            btn.closest('tr').remove();
+            saveTableToLocal();
+        }
+    }
+
+    function saveTableToLocal() {
+        const rows = [];
+        document.querySelectorAll('#tableBody tr').forEach(tr => {
+            const cells = tr.querySelectorAll('td');
+            rows.push({
+                date: cells[0].innerText,
+                hours: cells[1].innerText,
+                bs: cells[2].innerText,
+                time: cells[3].innerText
+            });
+        });
+        localStorage.setItem(DATA_KEY, JSON.stringify(rows));
+    }
+
+    function clearData() {
+        if(confirm('Wipe all data?')) {
+            document.getElementById('tableBody').innerHTML = '';
+            localStorage.removeItem(DATA_KEY);
+        }
+    }
+
+    function filterTable() {
+        const q = document.getElementById('search').value.toLowerCase();
+        document.querySelectorAll('#tableBody tr').forEach(r => {
+            r.classList.toggle('hidden', !r.innerText.toLowerCase().includes(q));
+        });
+    }
+
+    function downloadCSV() {
+        let csv = 'Date,Hours,B/s,TimeLogged\n';
+        const data = JSON.parse(localStorage.getItem(DATA_KEY) || '[]');
+        data.forEach(d => {
+            csv += `"${d.date}","${d.hours}","${d.bs}","${d.time}"\n`;
+        });
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(new Blob([csv], {type:'text/csv'}));
+        a.download = 'report.csv';
+        a.click();
+    }
+
+    // Initialize
+    window.onload = () => {
+        if (localStorage.getItem('darkMode') === 'true') document.body.classList.add('dark-mode');
+        
+        const savedTitle = localStorage.getItem('appTitle');
+        if (savedTitle) document.getElementById('siteName').value = savedTitle;
+
+        const savedData = JSON.parse(localStorage.getItem(DATA_KEY) || '[]');
+        // Reverse because renderRow adds to top
+        savedData.reverse().forEach(d => renderRow(d.date, d.hours, d.bs, d.time));
+        
+        if ('serviceWorker' in navigator) { navigator.serviceWorker.register('sw.js'); }
+    };
+</script>
+</body>
+</html>
